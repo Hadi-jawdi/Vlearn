@@ -27,10 +27,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # MY apps
-    'chat_app',
+    'chat_app', #for meetings chat 
     'account_app',
     'mettings_app',
     'home_app',
+    'messages_app',
     
     
 ]

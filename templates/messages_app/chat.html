@@ -1,0 +1,319 @@
+{% extends "includes/header.html" %}
+{% load static %}
+
+<style>
+/* Container to center chat area vertically and horizontally */
+.chat-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 90vh;
+    padding: 1rem;
+    background-color: #36393f;
+}
+
+/* Chat box wrapper with max width and full height */
+.chat-box-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 700px;
+    height: 100%;
+    border: 1px solid #2f3136;
+    border-radius: 8px;
+    background-color: #2f3136;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+/* Chat header */
+.chat-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #202225;
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.25rem;
+    background-color: #202225;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+/* Chat messages area */
+#chat-box {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem 1.5rem;
+    background-color: #2f3136;
+    color: #dcddde;
+    font-size: 0.9rem;
+}
+
+/* Message bubble base */
+.message-bubble {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    word-wrap: break-word;
+    line-height: 1.3;
+}
+
+/* Sent message bubble */
+.message-sent {
+    background-color: #5865f2;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+/* Received message bubble */
+.message-received {
+    background-color: #202225;
+    color: #dcddde;
+    border-bottom-left-radius: 4px;
+}
+
+/* Message container alignment */
+.message-container {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+/* Sent messages aligned right */
+.message-container.sent {
+    justify-content: flex-end;
+}
+
+/* Received messages aligned left */
+.message-container.received {
+    justify-content: flex-start;
+}
+
+/* Timestamp styling */
+.message-timestamp {
+    font-size: 0.7rem;
+    color: #72767d;
+    margin-top: 4px;
+    text-align: right;
+}
+
+/* Input form styling */
+#message-form {
+    display: flex;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #202225;
+    background-color: #40444b;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* Input box styling */
+#message-input {
+    flex-grow: 1;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 15px;
+    font-size: 1rem;
+    background-color: #2f3136;
+    color: #dcddde;
+    outline: none;
+    margin-right: 10px;
+}
+
+/* Input placeholder color */
+#message-input::placeholder {
+    color: #72767d;
+}
+
+/* Send button styling */
+#message-form button {
+    background-color: #5865f2;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#message-form button:hover {
+    background-color: #4752c4;
+}
+
+/* Scrollbar styling for chat box */
+#chat-box::-webkit-scrollbar {
+    width: 8px;
+}
+
+#chat-box::-webkit-scrollbar-thumb {
+    background-color: #202225;
+    border-radius: 4px;
+}
+
+#chat-box::-webkit-scrollbar-track {
+    background-color: #2f3136;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .chat-box-wrapper {
+        max-width: 100%;
+        height: 90vh;
+        border-radius: 0;
+    }
+}
+</style>
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        {% if not selected_user %}
+        <div class="col-md-4 border-right" style="height: 80vh; overflow-y: auto;">
+            <h5>Users</h5>
+            <ul class="list-group" id="user-list">
+                {% for user in users %}
+                <a href="{% url 'messages_app:chat_with_user' user.username %}" class="list-group-item list-group-item-action {% if selected_user and user == selected_user %}active{% endif %}">
+                    {{ user.username }}
+                </a>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        <div class="col-md-8 d-flex flex-column" style="height: 80vh;">
+            {% if selected_user %}
+            <h5>Chat with {{ selected_user.username }}</h5>
+            <div id="chat-box" class="border rounded flex-grow-1 mb-3 p-3" style="overflow-y: auto; background-color: #f8f9fa;">
+                {% for message in messages %}
+                <div class="d-flex {% if message.sender == request.user %}justify-content-end{% else %}justify-content-start{% endif %} mb-2">
+                    <div class="p-2 rounded {% if message.sender == request.user %}message-sent{% else %}message-received{% endif %}">
+                        <small>{{ message.content }}</small><br>
+                        <small class="text-muted" style="font-size: 0.7rem;">{{ message.timestamp|date:"H:i" }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <form id="message-form" class="input-group" method="post" action="{% url 'messages_app:send_message' %}">
+                {% csrf_token %}
+                <input type="text" id="message-input" name="content" class="form-control" placeholder="Type a message..." autocomplete="off" required>
+                <button class="btn btn-primary" type="submit">Send</button>
+            </form>
+            {% else %}
+            <p>Select a user to start chatting.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    const selectedUser = "{% if selected_user %}{{ selected_user.username }}{% else %}{% endif %}";
+    const chatBox = document.getElementById('chat-box');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+
+    function scrollToBottom() {
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function fetchMessages() {
+        if (!selectedUser) return;
+        console.log("Fetching messages for user:", selectedUser);
+        fetch(`/messages/messages/${selectedUser}/`)
+            .then(response => response.json())
+            .then(data => {
+                console.log("Received messages:", data.messages.length);
+                chatBox.innerHTML = '';
+                data.messages.forEach((msg) => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.classList.add('d-flex', 'mb-2');
+                    if (msg.sender === "{{ request.user.username }}") {
+                        msgDiv.classList.add('justify-content-end');
+                    } else {
+                        msgDiv.classList.add('justify-content-start');
+                    }
+                    const bubble = document.createElement('div');
+                    bubble.classList.add('p-2', 'rounded');
+                    bubble.classList.add(msg.sender === "{{ request.user.username }}" ? 'message-sent' : 'message-received');
+                    bubble.innerHTML = `<small>${msg.content}</small><br><small class="text-muted" style="font-size: 0.7rem;">${msg.timestamp.split(' ')[1].slice(0,5)}</small>`;
+                    msgDiv.appendChild(bubble);
+                    chatBox.appendChild(msgDiv);
+                });
+                scrollToBottom();
+            });
+    }
+
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const content = messageInput.value.trim();
+        if (!content) return;
+        fetch('/messages/send/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                receiver: selectedUser,
+                content: content
+            })
+        }).then(response => {
+            console.log('Send message response status:', response.status);
+            if (response.ok) {
+                messageInput.value = '';
+                fetchMessages();
+            } else {
+                response.text().then(text => {
+                    console.error('Send message error:', text);
+                    alert('Failed to send message: ' + text);
+                });
+            }
+        }).catch(error => {
+            console.error('Send message fetch error:', error);
+            alert('Failed to send message due to network error.');
+        });
+    });
+
+    function fetchMessages() {
+        if (!selectedUser) return;
+        console.log("Fetching messages for user:", selectedUser);
+        fetch(`/messages/messages/${selectedUser}/`)
+            .then(response => {
+                if (!response.ok) {
+                    console.error('Fetch messages error status:', response.status);
+                    alert('Failed to fetch messages.');
+                    return;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                console.log("Received messages:", data.messages.length);
+                chatBox.innerHTML = '';
+                data.messages.forEach((msg) => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.classList.add('d-flex', 'mb-2');
+                    if (msg.sender === "{{ request.user.username }}") {
+                        msgDiv.classList.add('justify-content-end');
+                    } else {
+                        msgDiv.classList.add('justify-content-start');
+                    }
+                    const bubble = document.createElement('div');
+                    bubble.classList.add('p-2', 'rounded');
+                    bubble.classList.add(msg.sender === "{{ request.user.username }}" ? 'message-sent' : 'message-received');
+                    bubble.innerHTML = `<small>${msg.content}</small><br><small class="text-muted" style="font-size: 0.7rem;">${msg.timestamp.split(' ')[1].slice(0,5)}</small>`;
+                    msgDiv.appendChild(bubble);
+                    chatBox.appendChild(msgDiv);
+                });
+                scrollToBottom();
+            })
+            .catch(error => {
+                console.error('Fetch messages error:', error);
+                alert('Failed to fetch messages due to network error.');
+            });
+    }
+
+    // Poll for new messages every 3 seconds
+    setInterval(fetchMessages, 3000);
+
+    // Initial fetch and scroll
+    fetchMessages();
+</script>
+{% endblock %}
