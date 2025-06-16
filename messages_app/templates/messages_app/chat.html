@@ -223,6 +223,7 @@
         fetch(`/messages/messages/${selectedUser}/`)
             .then(response => response.json())
             .then(data => {
+                console.log('Fetched messages:', data.messages);
                 chatBox.innerHTML = '';
                 data.messages.forEach((msg) => {
                     const msgDiv = document.createElement('div');
@@ -257,7 +258,7 @@
         }).then(response => {
             if (response.ok) {
                 messageInput.value = '';
-                fetchMessages();
+                setTimeout(fetchMessages, 500);
             } else {
                 alert('Failed to send message.');
             }

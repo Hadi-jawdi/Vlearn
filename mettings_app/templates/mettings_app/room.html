@@ -1,0 +1,130 @@
+{% extends "includes/header.html" %}
+{% load static %}
+{% block content %}
+    <h1 class="text-3xl font-bold mb-4">Room: {{ room.name }}</h1>
+    <div id="video-grid" class="w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+    <div id="controls" class="mt-4 space-x-4">
+        <button id="toggle-mic" class="btn btn-primary">Mute Mic</button>
+        <button id="toggle-screen" class="btn btn-secondary">Share Screen</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script>
+        const roomCode = "{{ room.code }}";
+        const videoGrid = document.getElementById('video-grid');
+        const toggleMicBtn = document.getElementById('toggle-mic');
+        const toggleScreenBtn = document.getElementById('toggle-screen');
+
+        let localStream;
+        let peer;
+        let currentCall;
+        let micEnabled = true;
+        let screenSharing = false;
+        let screenStream;
+
+        // Create WebSocket connection for signaling
+        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const signalingSocket = new WebSocket(
+            wsScheme + '://' + window.location.host + '/ws/room/' + roomCode + '/'
+        );
+
+        // Initialize PeerJS
+        peer = new Peer(undefined, {
+            host: '/',
+            port: window.location.port || (window.location.protocol === 'https:' ? 443 : 80),
+            path: '/peerjs'
+        });
+
+        // Add video element for local stream
+        function addVideoStream(video, stream) {
+            video.srcObject = stream;
+            video.addEventListener('loadedmetadata', () => {
+                video.play();
+            });
+            videoGrid.appendChild(video);
+        }
+
+        // Get user media (audio and video)
+        async function getMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const localVideo = document.createElement('video');
+                localVideo.muted = true;
+                addVideoStream(localVideo, localStream);
+            } catch (err) {
+                alert('Error accessing media devices.');
+                console.error(err);
+            }
+        }
+
+        // Call a new user
+        function callUser(peerId) {
+            const call = peer.call(peerId, localStream);
+            call.on('stream', userVideoStream => {
+                const video = document.createElement('video');
+                addVideoStream(video, userVideoStream);
+            });
+            call.on('close', () => {
+                video.remove();
+            });
+            currentCall = call;
+        }
+
+        // Answer incoming calls
+        peer.on('call', call => {
+            call.answer(localStream);
+            call.on('stream', userVideoStream => {
+                const video = document.createElement('video');
+                addVideoStream(video, userVideoStream);
+            });
+        });
+
+        // When peer is open, send ID to signaling server
+        peer.on('open', id => {
+            signalingSocket.send(JSON.stringify({ 'type': 'join', 'peer_id': id }));
+        });
+
+        // Handle signaling messages
+        signalingSocket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'new-peer' && data.peer_id !== peer.id) {
+                callUser(data.peer_id);
+            }
+        };
+
+        // Toggle microphone
+        toggleMicBtn.onclick = () => {
+            micEnabled = !micEnabled;
+            localStream.getAudioTracks()[0].enabled = micEnabled;
+            toggleMicBtn.textContent = micEnabled ? 'Mute Mic' : 'Unmute Mic';
+        };
+
+        // Toggle screen sharing
+        toggleScreenBtn.onclick = async () => {
+            if (!screenSharing) {
+                try {
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenTrack = screenStream.getVideoTracks()[0];
+                    const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    sender.replaceTrack(screenTrack);
+                    screenTrack.onended = () => {
+                        sender.replaceTrack(localStream.getVideoTracks()[0]);
+                        screenSharing = false;
+                        toggleScreenBtn.textContent = 'Share Screen';
+                    };
+                    screenSharing = true;
+                    toggleScreenBtn.textContent = 'Stop Sharing';
+                } catch (err) {
+                    console.error('Error sharing screen:', err);
+                }
+            } else {
+                const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                sender.replaceTrack(localStream.getVideoTracks()[0]);
+                screenSharing = false;
+                toggleScreenBtn.textContent = 'Share Screen';
+            }
+        };
+
+        getMedia();
+    </script>
+{% endblock %}

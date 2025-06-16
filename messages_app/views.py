@@ -29,11 +29,12 @@ def chat_view(request, username=None):
     })
 
 @login_required
-@csrf_exempt
 def send_message(request):
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"send_message called with method: {request.method}")
+    logger.info(f"Request user: {request.user.username}")
+    logger.info(f"Request user authenticated: {request.user.is_authenticated}")
     logger.info(f"Request headers: {request.headers}")
     try:
         body_unicode = request.body.decode('utf-8')
@@ -55,7 +56,7 @@ def send_message(request):
                 logger.warning(f"Receiver does not exist: {receiver_username}")
                 return HttpResponseBadRequest('Receiver does not exist')
             message = Message.objects.create(sender=request.user, receiver=receiver, content=content)
-            logger.info(f"Message created: {message.id}")
+            logger.info(f"Message created: {message.id} by sender: {request.user.username}")
             return JsonResponse({
                 'id': message.id,
                 'sender': message.sender.username,

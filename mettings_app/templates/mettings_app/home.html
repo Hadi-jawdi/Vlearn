@@ -1,0 +1,21 @@
+{% extends "includes/header.html" %}
+{% load static %}
+{% block content %}
+<div class="container max-w-md p-6 bg-white rounded shadow-md mx-auto mt-10">
+    <h1 class="text-2xl font-bold mb-4 text-center">Create a Room</h1>
+    <form method="post" action="{% url 'create_room' %}" class="mb-6">
+        {% csrf_token %}
+        <input type="text" name="room_name" placeholder="Room Name" required
+            class="form-control mb-3 p-2 border border-gray-300 rounded" />
+        <button type="submit" class="btn btn-primary w-100">Create Room</button>
+    </form>
+
+    <h1 class="text-2xl font-bold mb-4 text-center">Join a Room</h1>
+    <form method="post" action="{% url 'join_room' %}">
+        {% csrf_token %}
+        <input type="text" name="room_code" placeholder="Room Code" required
+            class="form-control mb-3 p-2 border border-gray-300 rounded" />
+        <button type="submit" class="btn btn-success w-100">Join Room</button>
+    </form>
+</div>
+{% endblock %}
