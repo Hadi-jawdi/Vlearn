@@ -1,10 +1,14 @@
 {% extends 'includes/header.html' %}
+{% load static %}
 {% block content %}
-    <h2>Register</h2>
-    <form method="post">
+<link rel="stylesheet" href="{% static 'account_app/register.css' %}">
+<div class="register-container">
+    <h2 class="register-heading">Register</h2>
+    <form method="post" class="register-form">
         {% csrf_token %}
         {{ form.as_p }}
-        <button type="submit" class="btn btn-md btn-success">Register</button>
+        <button type="submit">Register</button>
     </form>
-    <p>Already have an account? >Log In</a></p>
-{% endblock %} 
+    <p class="register-login-text">Already have an account? <a href="/account/login/">Log In</a></p>
+</div>
+{% endblock %}

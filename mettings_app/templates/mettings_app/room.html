@@ -1,130 +1,96 @@
 {% extends "includes/header.html" %}
 {% load static %}
 {% block content %}
-    <h1 class="text-3xl font-bold mb-4">Room: {{ room.name }}</h1>
-    <div id="video-grid" class="w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
-    <div id="controls" class="mt-4 space-x-4">
-        <button id="toggle-mic" class="btn btn-primary">Mute Mic</button>
-        <button id="toggle-screen" class="btn btn-secondary">Share Screen</button>
+    <style>
+        /* Custom styles for professional and cute look */
+        #video-grid video {
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            object-fit: cover;
+            width: 100%;
+            height: 200px;
+            position: relative;
+        }
+        #video-grid video:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        #video-grid {
+            position: relative;
+        }
+        .video-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            background: white;
+        }
+        .fullscreen-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            border: none;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .fullscreen-btn:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+        .fullscreen-icon {
+            width: 18px;
+            height: 18px;
+            fill: #4F46E5; /* Indigo-600 */
+        }
+    </style>
+
+    <div class="max-w-6xl mx-auto p-6">
+        <h1 class="text-4xl font-extrabold mb-6 text-center text-indigo-700">Room: {{ room.name }}</h1>
+
+        <!-- New section for sharing room code and link -->
+        {% if request.user == room.creator %}
+        <div class="mb-8 text-center bg-white p-6 rounded-lg shadow-lg border border-gray-300 max-w-xl mx-auto">
+            <p class="text-xl font-semibold text-gray-800 mb-3">Share this room code with others to join:</p>
+            <div class="inline-flex items-center space-x-3 justify-center mt-2">
+                <code class="bg-indigo-100 text-indigo-800 px-4 py-2 rounded-lg text-lg select-all font-mono tracking-wide" id="room-code">{{ room.code }}</code>
+                <button id="copy-code-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Copy Code
+                </button>
+            </div>
+            <p class="mt-6 text-xl font-semibold text-gray-800">Or share this link:</p>
+            <div class="inline-flex items-center space-x-3 justify-center mt-2">
+                <input type="text" readonly class="bg-indigo-100 text-indigo-800 px-4 py-2 rounded-lg text-lg w-96 select-all font-mono tracking-wide" id="room-link" value="{{ request.build_absolute_uri }}">
+                <button id="copy-link-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Copy Link
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
+        <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 rounded-lg shadow-lg bg-gray-50 p-4"></div>
+        <div id="controls" class="mt-6 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
+            <button id="toggle-mic" class="px-6 py-3 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                Mute Mic
+            </button>
+            <button id="toggle-camera" class="px-6 py-3 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                Turn Camera Off
+            </button>
+            <button id="toggle-screen" class="px-6 py-3 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                Share Screen
+            </button>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <script>
-        const roomCode = "{{ room.code }}";
-        const videoGrid = document.getElementById('video-grid');
-        const toggleMicBtn = document.getElementById('toggle-mic');
-        const toggleScreenBtn = document.getElementById('toggle-screen');
-
-        let localStream;
-        let peer;
-        let currentCall;
-        let micEnabled = true;
-        let screenSharing = false;
-        let screenStream;
-
-        // Create WebSocket connection for signaling
-        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-        const signalingSocket = new WebSocket(
-            wsScheme + '://' + window.location.host + '/ws/room/' + roomCode + '/'
-        );
-
-        // Initialize PeerJS
-        peer = new Peer(undefined, {
-            host: '/',
-            port: window.location.port || (window.location.protocol === 'https:' ? 443 : 80),
-            path: '/peerjs'
-        });
-
-        // Add video element for local stream
-        function addVideoStream(video, stream) {
-            video.srcObject = stream;
-            video.addEventListener('loadedmetadata', () => {
-                video.play();
-            });
-            videoGrid.appendChild(video);
-        }
-
-        // Get user media (audio and video)
-        async function getMedia() {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                const localVideo = document.createElement('video');
-                localVideo.muted = true;
-                addVideoStream(localVideo, localStream);
-            } catch (err) {
-                alert('Error accessing media devices.');
-                console.error(err);
-            }
-        }
-
-        // Call a new user
-        function callUser(peerId) {
-            const call = peer.call(peerId, localStream);
-            call.on('stream', userVideoStream => {
-                const video = document.createElement('video');
-                addVideoStream(video, userVideoStream);
-            });
-            call.on('close', () => {
-                video.remove();
-            });
-            currentCall = call;
-        }
-
-        // Answer incoming calls
-        peer.on('call', call => {
-            call.answer(localStream);
-            call.on('stream', userVideoStream => {
-                const video = document.createElement('video');
-                addVideoStream(video, userVideoStream);
-            });
-        });
-
-        // When peer is open, send ID to signaling server
-        peer.on('open', id => {
-            signalingSocket.send(JSON.stringify({ 'type': 'join', 'peer_id': id }));
-        });
-
-        // Handle signaling messages
-        signalingSocket.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            if (data.type === 'new-peer' && data.peer_id !== peer.id) {
-                callUser(data.peer_id);
-            }
-        };
-
-        // Toggle microphone
-        toggleMicBtn.onclick = () => {
-            micEnabled = !micEnabled;
-            localStream.getAudioTracks()[0].enabled = micEnabled;
-            toggleMicBtn.textContent = micEnabled ? 'Mute Mic' : 'Unmute Mic';
-        };
-
-        // Toggle screen sharing
-        toggleScreenBtn.onclick = async () => {
-            if (!screenSharing) {
-                try {
-                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                    const screenTrack = screenStream.getVideoTracks()[0];
-                    const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    sender.replaceTrack(screenTrack);
-                    screenTrack.onended = () => {
-                        sender.replaceTrack(localStream.getVideoTracks()[0]);
-                        screenSharing = false;
-                        toggleScreenBtn.textContent = 'Share Screen';
-                    };
-                    screenSharing = true;
-                    toggleScreenBtn.textContent = 'Stop Sharing';
-                } catch (err) {
-                    console.error('Error sharing screen:', err);
-                }
-            } else {
-                const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                sender.replaceTrack(localStream.getVideoTracks()[0]);
-                screenSharing = false;
-                toggleScreenBtn.textContent = 'Share Screen';
-            }
-        };
-
-        getMedia();
-    </script>
+    <script src="{% static 'mettings_app/room.js' %}"></script>
 {% endblock %}
