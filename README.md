@@ -37,5 +37,3 @@ Each app contains tests in their respective `tests.py` files. Run all tests with
 python manage.py test
 ```
 Made with Love!
-
-This project is licensed under the MIT License. See the LICENSE file for details.
